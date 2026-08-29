@@ -5,6 +5,8 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { ApiError } from '../../utils/apiError.js';
 import { sendResponse } from '../../utils/apiResponse.js';
 import path from 'path';
+import fs from 'fs';
+import { uploadToR2, getR2SignedUrl } from '../../config/r2.js';
 
 export class DocumentsService {
   static async uploadDocument(userId: string, file: Express.Multer.File, docName?: string) {
@@ -13,6 +15,23 @@ export class DocumentsService {
     if (ext === 'PDF') docType = 'PDF';
     else if (['DOCX', 'DOC'].includes(ext)) docType = 'DOCX';
     else if (['PNG', 'JPG', 'JPEG'].includes(ext)) docType = 'IMAGE';
+
+    // Upload file to Cloudflare R2
+    let storageKey = file.filename;
+    let fileUrl = `/uploads/${file.filename}`;
+
+    try {
+      if (file.path && fs.existsSync(file.path)) {
+        const fileBuffer = fs.readFileSync(file.path);
+        const r2Key = `documents/${userId}/${Date.now()}_${file.originalname.replace(/\s+/g, '_')}`;
+        const uploadResult = await uploadToR2(fileBuffer, r2Key, file.mimetype);
+        storageKey = uploadResult.key;
+        fileUrl = uploadResult.url;
+        console.log(`☁️ Cloudflare R2 Upload Success: ${r2Key}`);
+      }
+    } catch (r2Err) {
+      console.warn('⚠️ Cloudflare R2 upload fallback to local storage:', r2Err);
+    }
 
     // 1. Create document record
     const [doc] = await db
@@ -30,7 +49,7 @@ export class DocumentsService {
       .insert(documentVersions)
       .values({
         documentId: doc.id,
-        storageKey: file.filename,
+        storageKey,
         fileName: file.originalname,
         mimeType: file.mimetype,
         fileSize: file.size,
@@ -205,8 +224,21 @@ export class DocumentsController {
     try {
       const doc = await DocumentsService.getDocumentById(req.user!.userId, req.params.id as string);
       const latestVer = doc.versions[doc.versions.length - 1];
-      const downloadUrl = `/uploads/${latestVer.storageKey}`;
-      return sendResponse({ res, message: 'Download URL generated', data: { downloadUrl, expiresAt: new Date(Date.now() + 15 * 60 * 1000) } });
+      let downloadUrl = `/uploads/${latestVer.storageKey}`;
+
+      if (latestVer.storageKey && latestVer.storageKey.startsWith('documents/')) {
+        try {
+          downloadUrl = await getR2SignedUrl(latestVer.storageKey, 3600);
+        } catch (r2Err) {
+          console.warn('⚠️ Cloudflare R2 presigned URL generation fallback:', r2Err);
+        }
+      }
+
+      return sendResponse({
+        res,
+        message: 'Cloudflare R2 Download URL generated',
+        data: { downloadUrl, expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
+      });
     } catch (error) {
       next(error);
     }

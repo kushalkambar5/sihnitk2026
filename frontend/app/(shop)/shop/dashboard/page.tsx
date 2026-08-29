@@ -10,34 +10,42 @@ import { useQuery } from '@tanstack/react-query';
 import { ordersService } from '@/services/orders.service';
 import { printersService } from '@/services/printers.service';
 import { queueService } from '@/services/queue.service';
+import { shopsService } from '@/services/shops.service';
 import {
   ShoppingBag,
   IndianRupee,
   Printer,
   Layers,
   ArrowRight,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
 } from 'lucide-react';
 
 export default function ShopDashboardPage() {
   const { user } = useAuthStore();
-  const shopId = 'demo-shop-id';
+
+  const { data: myShops = [] } = useQuery({
+    queryKey: ['my-shops'],
+    queryFn: () => shopsService.getMyShops(),
+    enabled: !!user,
+  });
+
+  const shopId = myShops[0]?.id || '';
 
   const { data: orders = [] } = useQuery({
     queryKey: ['shop-orders', shopId],
     queryFn: () => ordersService.getShopOrders(shopId),
+    enabled: !!shopId,
   });
 
   const { data: printers = [] } = useQuery({
     queryKey: ['shop-printers', shopId],
     queryFn: () => printersService.getShopPrinters(shopId),
+    enabled: !!shopId,
   });
 
   const { data: queue = [] } = useQuery({
     queryKey: ['shop-queue', shopId],
     queryFn: () => queueService.getShopQueue(shopId),
+    enabled: !!shopId,
   });
 
   const activePrinters = printers.filter((p) => p.status === 'ONLINE' || p.status === 'BUSY');
@@ -66,8 +74,8 @@ export default function ShopDashboardPage() {
                 <ShoppingBag className="h-6 w-6" />
               </div>
               <div>
-                <span className="text-xs text-zinc-500 block">Today's Orders</span>
-                <span className="text-2xl font-extrabold text-white">{orders.length || 42}</span>
+                <span className="text-xs text-zinc-500 block">Total Orders</span>
+                <span className="text-2xl font-extrabold text-white">{orders.length}</span>
               </div>
             </div>
 
@@ -77,7 +85,9 @@ export default function ShopDashboardPage() {
               </div>
               <div>
                 <span className="text-xs text-zinc-500 block">Today's Revenue</span>
-                <span className="text-2xl font-extrabold text-white">₹4,280</span>
+                <span className="text-2xl font-extrabold text-white">
+                  ₹{orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0)}
+                </span>
               </div>
             </div>
 
@@ -87,7 +97,7 @@ export default function ShopDashboardPage() {
               </div>
               <div>
                 <span className="text-xs text-zinc-500 block">Active Printers</span>
-                <span className="text-2xl font-extrabold text-white">{activePrinters.length || 3} / 4</span>
+                <span className="text-2xl font-extrabold text-white">{activePrinters.length} / {printers.length || 1}</span>
               </div>
             </div>
 
@@ -97,7 +107,7 @@ export default function ShopDashboardPage() {
               </div>
               <div>
                 <span className="text-xs text-zinc-500 block">Queued Jobs</span>
-                <span className="text-2xl font-extrabold text-white">{queue.length || 5}</span>
+                <span className="text-2xl font-extrabold text-white">{queue.length}</span>
               </div>
             </div>
           </div>
@@ -111,37 +121,37 @@ export default function ShopDashboardPage() {
               </Link>
             </div>
 
-            <div className="space-y-3">
-              {[
-                { id: 'DP-00124', doc: 'Assignment.pdf', pages: 12, status: 'PRINTING', amount: 54 },
-                { id: 'DP-00125', doc: 'Lab_Report.pdf', pages: 20, status: 'QUEUED', amount: 70 },
-                { id: 'DP-00126', doc: 'Resume_2026.pdf', pages: 2, status: 'READY_FOR_PICKUP', amount: 15 },
-              ].map((o) => (
-                <div
-                  key={o.id}
-                  className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-white">Order #{o.id}</span>
-                      <span className="rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-[10px] font-bold text-indigo-300">
-                        {o.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-zinc-400">
-                      Document: {o.doc} • {o.pages} Pages • Amount: ₹{o.amount}
-                    </p>
-                  </div>
-
-                  <Link
-                    href={`/shop/orders`}
-                    className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 transition"
+            {orders.length === 0 ? (
+              <p className="text-xs text-zinc-500 italic py-4">No active shop orders found.</p>
+            ) : (
+              <div className="space-y-3">
+                {orders.slice(0, 5).map((o) => (
+                  <div
+                    key={o.id}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
-                    Manage Order <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-              ))}
-            </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white">Order #{o.orderNumber || o.id.slice(0, 8)}</span>
+                        <span className="rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-[10px] font-bold text-indigo-300">
+                          {o.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-400">
+                        Amount: ₹{o.totalAmount} • Status: {o.status}
+                      </p>
+                    </div>
+
+                    <Link
+                      href={`/shop/orders`}
+                      className="flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 transition"
+                    >
+                      Manage Order <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </main>
       </div>

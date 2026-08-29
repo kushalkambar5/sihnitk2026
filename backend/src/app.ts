@@ -27,7 +27,22 @@ import adminRoutes from './modules/admin/admin.routes.js';
 const app = express();
 
 // Global Middlewares
-app.use(cors());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. server-to-server, mobile apps, postman, curl)
+      if (!origin) return callback(null, true);
+      // Allow localhost and 127.0.0.1 on any dev port
+      if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

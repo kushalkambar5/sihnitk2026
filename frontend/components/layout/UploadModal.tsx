@@ -2,9 +2,10 @@
 
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, UploadCloud, FileText, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { X, UploadCloud, FileText, CheckCircle2, AlertCircle, ArrowRight, LogIn } from 'lucide-react';
 import { useUiStore } from '@/stores/ui.store';
 import { useCheckoutStore } from '@/stores/checkout.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { documentsService } from '@/services/documents.service';
 import { DocumentItem } from '@/types';
 
@@ -12,6 +13,7 @@ export default function UploadModal() {
   const router = useRouter();
   const { isUploadModalOpen, closeUploadModal } = useUiStore();
   const { setDocument } = useCheckoutStore();
+  const { isAuthenticated } = useAuthStore();
 
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -19,6 +21,7 @@ export default function UploadModal() {
   const [progress, setProgress] = useState(0);
   const [uploadedDoc, setUploadedDoc] = useState<DocumentItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthError, setIsAuthError] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -41,6 +44,7 @@ export default function UploadModal() {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       setSelectedFile(e.dataTransfer.files[0]);
       setError(null);
+      setIsAuthError(false);
     }
   };
 
@@ -48,13 +52,22 @@ export default function UploadModal() {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
       setError(null);
+      setIsAuthError(false);
     }
   };
 
   const handleStartUpload = async () => {
     if (!selectedFile) return;
+
+    if (!isAuthenticated) {
+      setError('Please sign in to upload and configure document prints.');
+      setIsAuthError(true);
+      return;
+    }
+
     setUploading(true);
     setError(null);
+    setIsAuthError(false);
     setProgress(10);
 
     try {
@@ -64,7 +77,12 @@ export default function UploadModal() {
       setProgress(100);
     } catch (err: any) {
       console.error(err);
-      setError(err?.response?.data?.message || 'Failed to upload document. Please log in or try again.');
+      if (err?.response?.status === 401) {
+        setIsAuthError(true);
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(err?.response?.data?.message || 'Failed to upload document. Please try again.');
+      }
     } finally {
       setUploading(false);
     }
@@ -75,8 +93,13 @@ export default function UploadModal() {
     router.push('/print/configure');
   };
 
+  const handleGoToLogin = () => {
+    closeUploadModal();
+    router.push('/login');
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in font-sans">
       <div className="relative w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
         {/* Close Button */}
         <button
@@ -98,9 +121,19 @@ export default function UploadModal() {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
-            <span>{error}</span>
+          <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-xs text-rose-300 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+              <span>{error}</span>
+            </div>
+            {isAuthError && (
+              <button
+                onClick={handleGoToLogin}
+                className="flex items-center gap-1 text-xs font-bold text-indigo-400 hover:underline shrink-0"
+              >
+                <LogIn className="h-3.5 w-3.5" /> Sign In
+              </button>
+            )}
           </div>
         )}
 

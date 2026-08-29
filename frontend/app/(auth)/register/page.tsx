@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { signIn } from 'next-auth/react';
 import Navbar from '@/components/layout/Navbar';
 import NotificationDrawer from '@/components/layout/NotificationDrawer';
 import { authService } from '@/services/auth.service';
@@ -29,8 +30,21 @@ export default function RegisterPage() {
     setError(null);
 
     try {
-      const data = await authService.register({ name, email, phone, password, role });
+      const cleanPhone = phone.trim() ? phone.trim() : undefined;
+      const data = await authService.register({ name, email, phone: cleanPhone, password, role });
+      
       setAuth(data.user, data.accessToken, data.refreshToken);
+
+      // Sign in to NextAuth session
+      const res = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (res?.error) {
+        console.warn('NextAuth session sync warning:', res.error);
+      }
 
       if (role === 'CUSTOMER') router.push('/dashboard');
       else if (role === 'SHOP_OWNER') router.push('/shop/dashboard');
@@ -38,7 +52,13 @@ export default function RegisterPage() {
       else router.push('/dashboard');
     } catch (err: any) {
       console.error(err);
-      setError(err?.response?.data?.message || 'Registration failed. Please check inputs.');
+      const serverMsg = err?.response?.data?.message;
+      const serverDetails = err?.response?.data?.errors;
+      if (Array.isArray(serverDetails) && serverDetails.length > 0) {
+        setError(`${serverMsg || 'Validation Error'}: ${serverDetails.map((d: any) => d.message || d.field).join(', ')}`);
+      } else {
+        setError(serverMsg || 'Registration failed. Please check inputs.');
+      }
     } finally {
       setLoading(false);
     }
@@ -117,7 +137,7 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block font-semibold text-zinc-400 mb-1">Phone Number</label>
+              <label className="block font-semibold text-zinc-400 mb-1">Phone Number (Optional)</label>
               <div className="relative">
                 <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
                 <input
@@ -148,7 +168,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition disabled:opacity-50"
             >
               <UserPlus className="h-4 w-4" />
               {loading ? 'Registering...' : 'Create Account'}

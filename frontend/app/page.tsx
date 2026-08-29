@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/layout/Navbar';
 import UploadModal from '@/components/layout/UploadModal';
@@ -21,10 +21,22 @@ import {
   ArrowRight,
   CheckCircle2,
   FileText,
+  Plus,
+  Minus,
 } from 'lucide-react';
+import { ColorMode } from '@/types';
 
 export default function LandingPage() {
   const { openUploadModal } = useUiStore();
+
+  const [colorMode, setColorMode] = useState<ColorMode>('BLACK_WHITE');
+  const [hasBinding, setHasBinding] = useState<boolean>(true);
+  const [copies, setCopies] = useState<number>(2);
+
+  const pageCount = 12;
+  const pricePerPage = colorMode === 'COLOR' ? 10 : 2;
+  const bindingFee = hasBinding ? 30 : 0;
+  const totalPrice = (pageCount * pricePerPage + bindingFee) * copies;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
@@ -41,11 +53,6 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             {/* Hero Left Content */}
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-1.5 text-xs font-semibold text-indigo-300 backdrop-blur-md">
-                <Sparkles className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
-                <span>Automated Cloud Printing & Smart Queue System</span>
-              </div>
-
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] text-white">
                 Upload. Configure.{' '}
                 <span className="bg-gradient-to-r from-indigo-400 via-cyan-300 to-indigo-200 bg-clip-text text-transparent">
@@ -102,10 +109,10 @@ export default function LandingPage() {
                     <div className="h-3 w-3 rounded-full bg-amber-500/80" />
                     <div className="h-3 w-3 rounded-full bg-emerald-500/80" />
                   </div>
-                  <span className="text-xs font-mono text-zinc-500">Live Print Configuration</span>
+                  <span className="text-xs font-mono text-zinc-500">Interactive Live Configurator</span>
                 </div>
 
-                {/* Simulated Document Preview */}
+                {/* Document Preview Card */}
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 mb-5 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400">
@@ -113,7 +120,7 @@ export default function LandingPage() {
                     </div>
                     <div>
                       <h4 className="text-xs font-bold text-white">CS_Final_Assignment.pdf</h4>
-                      <p className="text-[11px] text-zinc-500">12 Pages • 2.4 MB</p>
+                      <p className="text-[11px] text-zinc-500">{pageCount} Pages • 2.4 MB</p>
                     </div>
                   </div>
                   <span className="rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 text-[10px] font-bold text-emerald-400">
@@ -121,24 +128,73 @@ export default function LandingPage() {
                   </span>
                 </div>
 
-                {/* Simulated Controls */}
+                {/* Interactive Controls */}
                 <div className="space-y-3 text-xs">
+                  {/* Color Mode Interactive Options */}
                   <div className="flex justify-between items-center bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/50">
                     <span className="text-zinc-400 font-medium">Color Mode</span>
                     <div className="flex gap-2">
-                      <span className="px-2.5 py-1 rounded-lg bg-indigo-600 font-semibold text-white">B&W (₹2/pg)</span>
-                      <span className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-400">Color (₹10/pg)</span>
+                      <button
+                        type="button"
+                        onClick={() => setColorMode('BLACK_WHITE')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                          colorMode === 'BLACK_WHITE'
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                            : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        B&W (₹2/pg)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setColorMode('COLOR')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                          colorMode === 'COLOR'
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                            : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        Color (₹10/pg)
+                      </button>
                     </div>
                   </div>
 
+                  {/* Binding Interactive Toggle */}
                   <div className="flex justify-between items-center bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/50">
                     <span className="text-zinc-400 font-medium">Binding</span>
-                    <span className="font-semibold text-zinc-200">Spiral Binding (+₹30)</span>
+                    <button
+                      type="button"
+                      onClick={() => setHasBinding(!hasBinding)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                        hasBinding
+                          ? 'bg-indigo-600/20 border border-indigo-500/40 text-indigo-300'
+                          : 'bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      {hasBinding ? 'Spiral Binding (+₹30)' : 'No Binding'}
+                    </button>
                   </div>
 
+                  {/* Copies Interactive Counter */}
                   <div className="flex justify-between items-center bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/50">
                     <span className="text-zinc-400 font-medium">Copies</span>
-                    <span className="font-semibold text-zinc-200">2 Copies</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCopies(Math.max(1, copies - 1))}
+                        className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 transition"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="font-bold text-white px-2 text-xs">{copies}</span>
+                      <button
+                        type="button"
+                        onClick={() => setCopies(copies + 1)}
+                        className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 transition"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -146,7 +202,7 @@ export default function LandingPage() {
                 <div className="mt-5 rounded-2xl bg-gradient-to-r from-indigo-950/50 to-zinc-900 p-4 border border-indigo-500/30 flex items-center justify-between">
                   <div>
                     <span className="text-[11px] text-indigo-300 font-medium uppercase tracking-wider block">Estimated Price</span>
-                    <span className="text-2xl font-extrabold text-white">₹ 78.00</span>
+                    <span className="text-2xl font-extrabold text-white">₹ {totalPrice}.00</span>
                   </div>
                   <button
                     onClick={openUploadModal}
@@ -222,62 +278,43 @@ export default function LandingPage() {
             {/* AI Assistant */}
             <div className="rounded-3xl border border-indigo-500/20 bg-indigo-950/20 p-8 relative overflow-hidden">
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-300 mb-4">
-                <Bot className="h-3.5 w-3.5 text-indigo-400" />
-                <span>AI Document Assistant</span>
+                <Sparkles className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
+                DocPrint AI Engine
               </div>
-              <h3 className="text-2xl font-bold text-white mb-3">Generate Resumes & Reports via Conversational AI</h3>
+              <h3 className="text-2xl font-bold text-white mb-3">AI Document Synthesis & Formatter</h3>
               <p className="text-xs text-zinc-400 leading-relaxed mb-6">
-                Don't have a document ready? Chat with our built-in AI assistant to draft leave applications, project cover pages, or resumes, and send them straight to print.
+                Need a quick resume, formal cover letter, assignment cover page, or document summary? Ask DocPrint AI to format and prepare your file automatically before printing.
               </p>
               <Link
                 href="/ai"
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 transition"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-xs font-bold text-white hover:bg-indigo-500 transition shadow-lg shadow-indigo-600/30"
               >
-                Try AI Assistant
+                Launch AI Assistant
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
 
             {/* Smart Hardware Rerouting */}
-            <div className="rounded-3xl border border-cyan-500/20 bg-cyan-950/20 p-8 relative overflow-hidden">
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300 mb-4">
-                <Printer className="h-3.5 w-3.5 text-cyan-400" />
-                <span>Smart Hardware Rerouting</span>
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 relative overflow-hidden">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300 mb-4">
+                <Zap className="h-3.5 w-3.5 text-emerald-400" />
+                Fault-Tolerant Fleet
               </div>
-              <h3 className="text-2xl font-bold text-white mb-3">Zero-Downtime Printing Fleet</h3>
+              <h3 className="text-2xl font-bold text-white mb-3">Automated Printer Rerouting</h3>
               <p className="text-xs text-zinc-400 leading-relaxed mb-6">
-                If a printer runs out of paper or experiences a paper jam, DocPrint's real-time hardware monitoring automatically reroutes your job to the next available printer without delays.
+                If a printer runs out of paper, ink, or goes offline mid-job, DocPrint's real-time queue engine automatically reroutes your job to the nearest active printer without order delays.
               </p>
               <Link
                 href="/shops"
-                className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-5 py-2.5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/20 transition"
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-5 py-3 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 transition"
               >
-                View Live Shop Fleet
+                View Live Shop Printers
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="py-12 bg-zinc-950 border-t border-zinc-900 mt-auto">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
-              <Printer className="h-4 w-4" />
-            </div>
-            <span className="text-sm font-bold text-white">DocPrint Ecosystem © 2026</span>
-          </div>
-
-          <div className="flex items-center gap-6 text-xs text-zinc-500">
-            <Link href="/shops" className="hover:text-zinc-300 transition">Marketplace</Link>
-            <Link href="/services" className="hover:text-zinc-300 transition">Services</Link>
-            <Link href="/templates" className="hover:text-zinc-300 transition">Templates</Link>
-            <Link href="/login" className="hover:text-zinc-300 transition">Partner Login</Link>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

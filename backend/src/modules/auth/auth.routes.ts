@@ -9,7 +9,7 @@ const router = Router();
 const registerSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
-  phone: z.string().optional(),
+  phone: z.string().optional().or(z.literal('')),
   password: z.string().min(6),
   role: z.enum(['CUSTOMER', 'SHOP_OWNER', 'SHOP_STAFF', 'DELIVERY_PARTNER', 'ADMIN']).optional(),
 });
