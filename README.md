@@ -1,4 +1,4 @@
-# 1. Overall Frontend Architecture
+# 1. Overall Frontend Architecture-
 
 You have **5 different user experiences**:
 
