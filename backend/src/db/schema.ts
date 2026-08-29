@@ -10,6 +10,7 @@ import {
   timestamp,
   jsonb,
   inet,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 // ==========================================
@@ -389,7 +390,9 @@ export const shopServices = pgTable('shop_services', {
   serviceId: uuid('service_id').references(() => services.id, { onDelete: 'cascade' }).notNull(),
   isAvailable: boolean('is_available').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex('shop_services_shop_id_service_id_idx').on(table.shopId, table.serviceId),
+]);
 
 // 5. service_pricing
 export const servicePricing = pgTable('service_pricing', {
@@ -456,6 +459,7 @@ export const generatedDocuments = pgTable('generated_documents', {
 // 10. orders
 export const orders = pgTable('orders', {
   id: uuid('id').defaultRandom().primaryKey(),
+  orderNumber: varchar('order_number', { length: 50 }).notNull().unique(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   shopId: uuid('shop_id').references(() => shops.id, { onDelete: 'cascade' }).notNull(),
   status: orderStatusEnum('status').notNull(),
@@ -472,6 +476,9 @@ export const orderItems = pgTable('order_items', {
   orderId: uuid('order_id').references(() => orders.id, { onDelete: 'cascade' }).notNull(),
   documentVersionId: uuid('document_version_id').references(() => documentVersions.id, { onDelete: 'cascade' }).notNull(),
   quantity: integer('quantity').notNull(),
+  unitPrice: numeric('unit_price', { precision: 10, scale: 2 }),
+  subtotal: numeric('subtotal', { precision: 10, scale: 2 }),
+  pricingSnapshot: jsonb('pricing_snapshot'),
   status: orderItemStatusEnum('status').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -561,7 +568,9 @@ export const printerCapabilities = pgTable('printer_capabilities', {
   capabilityType: printerCapabilityTypeEnum('capability_type').notNull(),
   isSupported: boolean('is_supported').default(true).notNull(),
   metadata: jsonb('metadata'),
-});
+}, (table) => [
+  uniqueIndex('printer_capabilities_printer_id_capability_type_idx').on(table.printerId, table.capabilityType),
+]);
 
 // 19. printer_health_logs
 export const printerHealthLogs = pgTable('printer_health_logs', {
@@ -704,7 +713,9 @@ export const shopMembers = pgTable('shop_members', {
   role: shopMemberRoleEnum('role').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   joinedAt: timestamp('joined_at').defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex('shop_members_shop_id_user_id_idx').on(table.shopId, table.userId),
+]);
 
 // 30. deliveries
 export const deliveries = pgTable('deliveries', {
@@ -829,5 +840,28 @@ export const aiGeneratedOutputs = pgTable('ai_generated_outputs', {
   outputType: aiOutputTypeEnum('output_type').notNull(),
   modelName: varchar('model_name', { length: 100 }),
   metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// 41. user_sessions
+export const userSessions = pgTable('user_sessions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  refreshTokenHash: text('refresh_token_hash').notNull(),
+  deviceInfo: text('device_info'),
+  ipAddress: text('ip_address'),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  revokedAt: timestamp('revoked_at'),
+});
+
+// 42. printer_agents
+export const printerAgents = pgTable('printer_agents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  shopId: uuid('shop_id').references(() => shops.id, { onDelete: 'cascade' }).notNull(),
+  agentKeyHash: text('agent_key_hash').notNull(),
+  deviceName: varchar('device_name', { length: 100 }),
+  lastSeenAt: timestamp('last_seen_at'),
+  isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

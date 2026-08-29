@@ -1,1209 +1,1765 @@
-1. `users`
+# 1. Overall Frontend Architecture
 
-```jsx
-users
-------
-id
-name
-email
-phone
-password_hash
-role
-created_at
-updated_at
-```
-
-2. `shops`
-
-```jsx
-shops
-------
-id
-owner_id → users.id
-
-name
-description
-
-phone
-email
-
-address
-latitude
-longitude
-
-is_verified
-is_active
-
-created_at
-updated_at
-```
-
-3. `services`
-
-```jsx
-services
---------
-id
-name
-category
-description
-```
-
-shop_services
-
-```jsx
-shop_services
--------------
-id
-
-shop_id → shops.id
-service_id → services.id
-
-is_available
-
-created_at
-```
-
-service_pricing
-
-```jsx
-service_pricing
----------------
-id
-
-shop_service_id
-
-paper_size
-paper_type
-
-color_mode
-
-side_mode
-
-base_price
-price_per_page
-
-created_at
-updated_at
-```
-
-**Document Management Schema**
-
-`documents`
-
-```jsx
-documents
-─────────
-id
-user_id → users.id
-
-name
-document_type
-source_type
-
-created_at
-updated_at
-deleted_at
-```
-
-document_versions (Cloudflare R2)
-
-```jsx
-document_versions
-─────────────────
-id
-document_id → documents.id
-
-storage_key
-file_name
-mime_type
-file_size
-
-page_count
-
-version_number
-
-created_at
-```
-
-document_templates
-
-```jsx
-document_templates
-──────────────────
-id
-
-name
-description
-
-category
-
-template_definition
-preview_storage_key
-
-is_active
-
-created_at
-updated_at
-```
-
-generated_documents
-
-```jsx
-generated_documents
-───────────────────
-id
-
-user_id → users.id
-template_id → document_templates.id
-
-input_data JSONB
-
-document_id → documents.id
-
-created_at
-```
-
-**Print Order Schema**
-
-orders
-
-```jsx
-orders
-──────
-id
-
-user_id → users.id
-shop_id → shops.id
-
-status
-
-total_amount
-
-payment_status
-
-fulfillment_type
-
-created_at
-updated_at
-```
-
-order_items
-
-```jsx
-order_items
-───────────
-id
-
-order_id → orders.id
-document_version_id → document_versions.id
-
-quantity
-
-status
-
-created_at
-```
-
-print_configurations
-
-```jsx
-print_configurations
-────────────────────
-id
-
-order_item_id → order_items.id
-
-copies
-
-page_range
-
-color_mode
-
-print_side
-
-paper_size
-
-paper_type
-
-binding_type
-
-created_at
-```
-
-order_status_history
-
-```jsx
-order_status_history
---------------------
-id UUID PK
-
-order_id UUID FK → orders.id
-
-old_status
-new_status
-
-changed_by_user_id UUID FK → users.id NULL
-
-reason TEXT NULL
-
-created_at TIMESTAMP
-```
-
-6. Payments Architecture
-
-payments
-
-```jsx
-payments
---------
-id UUID PK
-
-order_id UUID FK → orders.id
-
-amount NUMERIC(10,2)
-currency VARCHAR(10)
-
-provider VARCHAR(50)
-provider_order_id VARCHAR(255)
-
-status payment_status
-
-created_at
-updated_at
-```
-
-payment_transactions
-
-```jsx
-payment_transactions
---------------------
-id UUID PK
-
-payment_id UUID FK → payments.id
-
-provider_payment_id VARCHAR(255)
-
-amount NUMERIC(10,2)
-
-method VARCHAR(50)
-
-status
-
-failure_reason TEXT NULL
-
-provider_response JSONB
-
-created_at
-```
-
-refunds
-
-```jsx
-refunds
--------
-id UUID PK
-
-payment_id UUID FK → payments.id
-
-amount NUMERIC(10,2)
-
-reason TEXT
-
-provider_refund_id VARCHAR(255)
-
-status
-
-created_at
-updated_at
-```
-
-9. Printer Architecture
-
-printers
-
-```jsx
-printers
---------
-id UUID PK
-
-shop_id UUID FK → shops.id
-
-name VARCHAR(100)
-
-manufacturer VARCHAR(100)
-model VARCHAR(100)
-
-printer_type
-
-connection_type
-
-status
-
-is_active BOOLEAN
-
-created_at
-updated_at
-```
-
-printer_capabilities
-
-```jsx
-printer_capabilities
---------------------
-id UUID PK
-
-printer_id UUID FK → printers.id
-
-capability_type
-
-is_supported BOOLEAN
-
-metadata JSONB
-```
-
-printer_health_logs
-
-```jsx
-printer_health_logs
--------------------
-id UUID PK
-
-printer_id UUID FK → printers.id
-
-status
-
-paper_level
-ink_level
-
-error_code VARCHAR(100)
-
-error_message TEXT
-
-metadata JSONB
-
-recorded_at TIMESTAMP
-```
-
-printer_failure_events
-
-```jsx
-printer_failure_events
-----------------------
-id UUID PK
-
-printer_id UUID FK → printers.id
-
-failure_type
-
-severity
-
-status
-
-detected_at
-resolved_at NULL
-
-details JSONB
-```
-
-print_jobs
-
-```jsx
-print_jobs
-----------
-id UUID PK
-
-order_item_id UUID FK → order_items.id
-
-shop_id UUID FK → shops.id
-
-printer_id UUID FK → printers.id NULL
-
-status
-
-priority_score NUMERIC
-
-estimated_duration_seconds INTEGER
-
-estimated_start_time TIMESTAMP NULL
-estimated_completion_time TIMESTAMP NULL
-
-started_at TIMESTAMP NULL
-completed_at TIMESTAMP NULL
-
-created_at
-updated_at
-```
-
-print_queue_entries
-
-```jsx
-print_queue_entries
--------------------
-id UUID PK
-
-print_job_id UUID FK → print_jobs.id
-
-printer_id UUID FK → printers.id NULL
-
-queue_position INTEGER NULL
-
-priority_score NUMERIC
-
-estimated_wait_seconds INTEGER
-
-queued_at TIMESTAMP
-
-status enum(WAITING
-ASSIGNED
-PROCESSING
-REMOVED)
-```
-
-queue_predictions
-
-```jsx
-queue_predictions
------------------
-id UUID PK
-
-shop_id UUID FK → shops.id
-
-printer_id UUID FK → printers.id NULL
-
-predicted_wait_seconds INTEGER
-
-predicted_completion_time TIMESTAMP
-
-confidence_score NUMERIC NULL
-
-model_version VARCHAR(100) NULL
-
-input_data JSONB
-
-created_at
-```
-
-Automatic Order Rerouting 🔥
-
-print_job_assignments
-
-```jsx
-print_job_assignments
----------------------
-id UUID PK
-
-print_job_id UUID FK → print_jobs.id
-
-printer_id UUID FK → printers.id
-
-assigned_at TIMESTAMP
-
-unassigned_at TIMESTAMP NULL
-
-assignment_reason
-
-status
-```
-
-Rerouting Events
-
-```jsx
-rerouting_events
-----------------
-id UUID PK
-
-print_job_id UUID FK → print_jobs.id
-
-source_printer_id UUID FK → printers.id
-
-target_printer_id UUID FK → printers.id NULL
-
-reason
-
-status
-
-created_at
-completed_at NULL
-```
-
-addresses
-
-```jsx
-addresses
----------
-id UUID PK
-
-user_id UUID FK → users.id NULL
-
-label VARCHAR(50)
-
-recipient_name VARCHAR(150)
-phone VARCHAR(20)
-
-address_line1 TEXT
-address_line2 TEXT NULL
-
-landmark TEXT NULL
-
-city VARCHAR(100)
-state VARCHAR(100)
-country VARCHAR(100)
-
-postal_code VARCHAR(20)
-
-latitude DECIMAL NULL
-longitude DECIMAL NULL
-
-is_default BOOLEAN
-
-created_at TIMESTAMP
-updated_at TIMESTAMP
-```
-
-## `pickup_tokens`
+You have **5 different user experiences**:
 
 ```
-pickup_tokens-------------
-id UUID PK
+┌──────────────────────────────┐
+│          CUSTOMER            │
+│ Find → Upload → Configure   │
+│ → Pay → Track → Pickup      │
+└──────────────────────────────┘
 
-order_id UUID FK → orders.id
+┌──────────────────────────────┐
+│         SHOP OWNER           │
+│ Dashboard → Orders → Queue  │
+│ → Printers → Analytics      │
+└──────────────────────────────┘
 
-token_hashVARCHAR(255)
+┌──────────────────────────────┐
+│         SHOP STAFF           │
+│ Orders → Queue → Pickup     │
+└──────────────────────────────┘
 
-expires_atTIMESTAMP
+┌──────────────────────────────┐
+│      DELIVERY PARTNER        │
+│ Jobs → Pickup → Deliver     │
+└──────────────────────────────┘
 
-status pickup_token_status
-
-created_atTIMESTAMP
-used_atTIMESTAMPNULL
+┌──────────────────────────────┐
+│           ADMIN              │
+│ Users → Shops → Monitoring  │
+└──────────────────────────────┘
 ```
 
-## `pickup_events`
+Do **not** put all of these into one dashboard with conditional rendering everywhere.
+
+Use route groups.
+
+---
+
+# 2. Complete Next.js Route Planning
+
+I recommend this structure:
 
 ```
-pickup_events-------------
-id UUID PK
-
-order_id UUID FK → orders.id
-
-pickup_token_id UUID FK → pickup_tokens.id
-
-verified_by_user_id UUID FK → users.id
-
-status
-
-notes TEXTNULL
-
-created_atTIMESTAMP
-```
-
-## `shop_members`
-
-```
-shop_members------------
-id UUID PK
-
-shop_id UUID FK → shops.id
-
-user_id UUID FK → users.idrole shop_member_role
-
-is_activeBOOLEAN
-
-joined_atTIMESTAMP
-```
-
-## `deliveries`
-
-```
-deliveries----------
-id UUID PK
-
-order_id UUID FK → orders.idUNIQUE
-
-delivery_address_id UUID FK → addresses.id
-
-delivery_partner_id UUID FK → users.idNULL
-
-status delivery_status
-
-estimated_delivery_timeTIMESTAMPNULL
-
-picked_up_atTIMESTAMPNULL
-delivered_atTIMESTAMPNULL
-
-created_atTIMESTAMP
-updated_atTIMESTAMP
-```
-
-## `delivery_tracking_events`
-
-```
-delivery_tracking_events------------------------
-id UUID PK
-
-delivery_id UUID FK → deliveries.id
-
-status
-
-latitudeDECIMALNULL
-longitudeDECIMALNULL
-
-message TEXTNULL
-
-created_atTIMESTAMP
-```
-
-## `delivery_location_logs`
-
-```
-delivery_location_logs----------------------
-id UUID PK
-
-delivery_id UUID FK → deliveries.id
-
-latitudeDECIMAL
-
-longitudeDECIMAL
-
-accuracyDECIMALNULL
-
-recorded_atTIMESTAMP
-```
-
-## `notifications`
-
-```
-notifications-------------
-id UUID PK
-
-user_id UUID FK → users.id
-
-type notification_type
-
-titleVARCHAR(255)
-
-message TEXTdata JSONB
-
-is_readBOOLEANDEFAULTFALSE
-
-created_atTIMESTAMP
-read_atTIMESTAMPNULL
-```
-
-## `notification_deliveries`
-
-```
-notification_deliveries-----------------------
-id UUID PK
-
-notification_id UUID FK → notifications.id
-
-channel
-
-status
-
-provider_message_idVARCHAR(255)NULL
-
-failure_reason TEXTNULL
-
-sent_atTIMESTAMPNULL
-
-created_atTIMESTAMP
-```
-
-## `document_access_grants`
-
-```
-document_access_grants----------------------
-id UUID PK
-
-document_id UUID FK → documents.id
-
-user_id UUID FK → users.id
-
-access_type
-
-granted_by UUID FK → users.idNULL
-
-expires_atTIMESTAMPNULL
-
-created_atTIMESTAMP
-```
-
-## `document_access_logs`
-
-```
-document_access_logs--------------------
-id UUID PK
-
-document_id UUID FK → documents.id
-
-document_version_id UUID FK → document_versions.idNULL
-
-user_id UUID FK → users.idNULLaction
-
-ip_address INETNULL
-
-user_agent TEXTNULL
-
-created_atTIMESTAMP
-```
-
-## `audit_logs`
-
-```
-audit_logs----------
-id UUID PK
-
-actor_user_id UUID FK → users.idNULLactionVARCHAR(100)
-
-entity_typeVARCHAR(100)
-
-entity_id UUID
-
-old_data JSONBNULL
-new_data JSONBNULL
-
-metadata JSONB
-
-created_atTIMESTAMP
-```
-
-## `ai_conversations`
-
-```
-ai_conversations----------------
-id UUID PK
-
-user_id UUID FK → users.id
-
-titleVARCHAR(255)NULL
-
-created_atTIMESTAMP
-updated_atTIMESTAMP
+src/
+├── app/
+│
+│   ├── (public)/
+│   │   ├── page.tsx
+│   │   ├── shops/
+│   │   │   ├── page.tsx
+│   │   │   └── [shopId]/
+│   │   │       └── page.tsx
+│   │   │
+│   │   ├── services/
+│   │   │   └── page.tsx
+│   │   │
+│   │   └── templates/
+│   │       ├── page.tsx
+│   │       └── [templateId]/
+│   │           └── page.tsx
+│   │
+│   ├── (auth)/
+│   │   ├── login/
+│   │   │   └── page.tsx
+│   │   ├── register/
+│   │   │   └── page.tsx
+│   │   ├── forgot-password/
+│   │   │   └── page.tsx
+│   │   └── reset-password/
+│   │       └── page.tsx
+│   │
+│   ├── (customer)/
+│   │   ├── layout.tsx
+│   │   ├── dashboard/
+│   │   ├── documents/
+│   │   ├── orders/
+│   │   ├── checkout/
+│   │   ├── addresses/
+│   │   ├── notifications/
+│   │   └── ai/
+│   │
+│   ├── (shop)/
+│   │   ├── layout.tsx
+│   │   ├── shop/
+│   │   │   └── dashboard/
+│   │   │
+│   │   ├── orders/
+│   │   ├── queue/
+│   │   ├── printers/
+│   │   ├── services/
+│   │   ├── pricing/
+│   │   ├── staff/
+│   │   ├── settings/
+│   │   └── analytics/
+│   │
+│   ├── (delivery)/
+│   │   ├── layout.tsx
+│   │   ├── delivery/
+│   │   │   ├── jobs/
+│   │   │   ├── active/
+│   │   │   └── history/
+│   │
+│   └── (admin)/
+│       ├── layout.tsx
+│       └── admin/
+│           ├── dashboard/
+│           ├── users/
+│           ├── shops/
+│           ├── printers/
+│           ├── orders/
+│           └── audit-logs/
+│
+├── components/
+├── features/
+├── lib/
+├── services/
+├── hooks/
+├── stores/
+└── types/
 ```
 
 ---
 
-## `ai_messages`
+# 3. Customer Frontend Pages
+
+This is your primary product.
+
+---
+
+## `/` — Landing Page
+
+### Purpose
+
+Explain:
 
 ```
-ai_messages-----------
-id UUID PK
-
-conversation_id UUID FK → ai_conversations.idrole
-
-content TEXT
-
-metadata JSONB
-
-created_atTIMESTAMP
+Upload Document
+↓
+Choose Nearby Shop
+↓
+Configure Printing
+↓
+Pay Online
+↓
+Skip Queue
+↓
+Pickup with QR
 ```
 
-## `ai_generated_outputs`
+### Sections
 
 ```
-ai_generated_outputs--------------------
-id UUID PK
+Navbar
 
-conversation_id UUID FK → ai_conversations.id
-
-document_id UUID FK → documents.idNULL
-
-output_type
-
-model_name
-
-metadata JSONB
-
-created_atTIMESTAMP
+Hero
+↓
+Upload CTA
+↓
+How It Works
+↓
+Find Shops
+↓
+Features
+↓
+AI Document Generation
+↓
+Printer Smart Queue
+↓
+Footer
 ```
 
-```jsx
-                              USERS
-                                │
-          ┌─────────────────────┼────────────────────┐
-          │                     │                    │
-          ▼                     ▼                    ▼
-       DOCUMENTS              SHOPS            NOTIFICATIONS
-          │                     │
-          ▼                     ▼
- DOCUMENT_VERSIONS       SHOP_MEMBERS
-          │                     │
-          │                     ├──────────► PRINTERS
-          │                     │                │
-          │                     │         ┌──────┼──────┐
-          │                     │         ▼      ▼      ▼
-          │                     │      HEALTH  QUEUE  FAILURES
-          │                     │
-          ▼                     ▼
-      ORDER_ITEMS ◄────────── ORDERS ──────────► PAYMENTS
-          │                     │                    │
-          ▼                     │                    ├── TRANSACTIONS
-      PRINT_CONFIG              │                    │
-          │                     │                    └── REFUNDS
-          ▼                     │
-       PRINT_JOBS               │
-          │                     │
-          ├── QUEUE_ENTRIES     │
-          │                     │
-          ├── ASSIGNMENTS       │
-          │                     │
-          └── REROUTING_EVENTS  │
-                                │
-                     ┌──────────┴──────────┐
-                     ▼                     ▼
-                  PICKUP                DELIVERY
-                     │                     │
-                 QR TOKENS          TRACKING EVENTS
-                                           │
-                                     LOCATION LOGS
-```
-
-
-
-
-
-
-
-## 1. User & Shop
+### APIs
 
 ```
-CREATE TYPE user_roleAS ENUM ('CUSTOMER','SHOP_OWNER','SHOP_STAFF','DELIVERY_PARTNER','ADMIN'
-);
-```
-
-```
-CREATE TYPE service_categoryAS ENUM ('PRINTING','SCANNING','PHOTOCOPY','LAMINATION','BINDING','THREE_D_PRINTING'
-);
+GET /shops
+GET /services
 ```
 
 ---
 
-# 2. Services & Printing
+# 4. `/shops` — Shop Discovery
 
-### Color mode
+This is the marketplace page.
 
-```
-CREATE TYPE color_modeAS ENUM ('BLACK_WHITE','COLOR'
-);
-```
-
-### Print side
+### UI
 
 ```
-CREATE TYPE print_sideAS ENUM ('SINGLE_SIDED','DOUBLE_SIDED'
-);
+┌─────────────────────────────────────┐
+│ Search                              │
+├──────────────┬──────────────────────┤
+│ Filters      │ Shop Cards           │
+│              │                      │
+│ Distance     │ Shop A               │
+│ Services     │ ₹X estimate          │
+│ Color        │ Queue: 10 mins       │
+│ Paper Size   │                      │
+│              │ Shop B               │
+└──────────────┴──────────────────────┘
 ```
 
-### Paper size
+### Axios API
 
 ```
-CREATE TYPE paper_sizeAS ENUM ('A4','A3','A5','LETTER','LEGAL'
-);
+GET/shops
 ```
 
-### Paper type
+Query:
 
 ```
-CREATE TYPE paper_typeAS ENUM ('NORMAL','GLOSSY','MATTE','PHOTO','CARDSTOCK'
-);
-```
-
-### Binding
-
-```
-CREATE TYPE binding_typeAS ENUM ('NONE','SPIRAL','COMB','STAPLE','PERFECT_BINDING'
-);
-```
-
----
-
-# 3. Documents
-
-### Document type
-
-```
-CREATE TYPE document_typeAS ENUM ('PDF','DOCX','IMAGE','PPTX','XLSX','OTHER'
-);
-```
-
-### Document source
-
-```
-CREATE TYPE document_source_typeAS ENUM ('UPLOADED','GENERATED','TEMPLATE'
-);
-```
-
-### Template category
-
-```
-CREATE TYPE template_categoryAS ENUM ('RESUME','LETTER','CERTIFICATE','ASSIGNMENT','REPORT','FORM','OTHER'
-);
+?latitude=
+&longitude=
+&service=
+&colorMode=
+&paperSize=
 ```
 
 ---
 
-# 4. Orders
+# 5. `/shops/[shopId]` — Shop Details
 
-### Order status
-
-This is one of the most important enums.
+Shows:
 
 ```
-CREATE TYPE order_statusAS ENUM ('CREATED','PAYMENT_PENDING','PAID','PROCESSING','READY_FOR_PICKUP','OUT_FOR_DELIVERY','COMPLETED','CANCELLED','FAILED','REFUNDED'
-);
+Shop Information
+Services
+Pricing
+Printer Availability
+Queue Time
+Ratings (future)
 ```
 
-### Order item status
+### APIs
 
 ```
-CREATE TYPE order_item_statusAS ENUM ('PENDING','QUEUED','PROCESSING','PRINTED','COMPLETED','FAILED','CANCELLED'
-);
+GET /shops/:shopId
+GET /shops/:shopId/services
+GET /shops/:shopId/queue/prediction
 ```
 
-### Fulfillment type
+### CTA
 
 ```
-CREATE TYPE fulfillment_typeAS ENUM ('PICKUP','DELIVERY'
-);
-```
-
----
-
-# 5. Payments
-
-### Payment status
-
-```
-CREATE TYPE payment_statusAS ENUM ('PENDING','PROCESSING','SUCCESS','FAILED','CANCELLED','PARTIALLY_REFUNDED','REFUNDED'
-);
-```
-
-### Payment provider
-
-If you're only using Razorpay initially, **don't create an enum yet**. Use `VARCHAR`.
-
-But if multiple providers are planned:
-
-```
-CREATE TYPE payment_providerAS ENUM ('RAZORPAY','STRIPE','CASH','OTHER'
-);
-```
-
-### Payment method
-
-```
-CREATE TYPE payment_methodAS ENUM ('UPI','CARD','NETBANKING','WALLET','CASH'
-);
-```
-
-### Refund status
-
-```
-CREATE TYPE refund_statusAS ENUM ('PENDING','PROCESSING','SUCCESS','FAILED','CANCELLED'
-);
+Upload & Print
 ```
 
 ---
 
-# 6. Printers
+# 6. Customer Dashboard
 
-### Printer type
-
-```
-CREATE TYPE printer_typeAS ENUM ('LASER','INKJET','THERMAL','THREE_D'
-);
-```
-
-### Connection type
+Route:
 
 ```
-CREATE TYPE printer_connection_typeAS ENUM ('USB','WIFI','ETHERNET','BLUETOOTH'
-);
+/dashboard
 ```
 
-### Printer status
+### UI
 
 ```
-CREATE TYPE printer_statusAS ENUM ('ONLINE','OFFLINE','BUSY','ERROR','MAINTENANCE'
-);
+Welcome Kush
+
+Active Orders
+────────────────
+
+Order #123
+PRINTING
+████████░░
+
+Recent Documents
+
+Quick Actions
+
+[ Upload Document ]
+[ Generate with AI ]
+[ Find Shop ]
 ```
 
-### Printer capability
+### APIs
 
 ```
-CREATE TYPE printer_capability_typeAS ENUM ('BLACK_WHITE_PRINTING','COLOR_PRINTING','DOUBLE_SIDED_PRINTING','A3_PRINTING','PHOTO_PRINTING'
-);
-```
-
-### Printer failure type
-
-```
-CREATE TYPE printer_failure_typeAS ENUM ('OFFLINE','PAPER_EMPTY','PAPER_JAM','INK_LOW','INK_EMPTY','TONER_LOW','TONER_EMPTY','CONNECTION_FAILURE','HARDWARE_ERROR','UNKNOWN_ERROR'
-);
-```
-
-### Failure severity
-
-```
-CREATE TYPE failure_severityAS ENUM ('LOW','MEDIUM','HIGH','CRITICAL'
-);
-```
-
-### Failure event status
-
-```
-CREATE TYPE failure_statusAS ENUM ('DETECTED','ACKNOWLEDGED','RESOLVED'
-);
+GET /orders
+GET /documents
+GET /notifications
 ```
 
 ---
 
-# 7. Print Jobs & Queue
+# 7. Documents Module
 
-### Print job status
+## `/documents`
 
-```
-CREATE TYPE print_job_statusAS ENUM ('PENDING','QUEUED','ASSIGNED','PROCESSING','COMPLETED','FAILED','CANCELLED','REROUTING'
-);
-```
-
-### Queue status
-
-You already identified this one:
+Document library.
 
 ```
-CREATE TYPE queue_statusAS ENUM ('WAITING','ASSIGNED','PROCESSING','REMOVED'
-);
+Documents
+
+[ Upload ]
+
+──────────────────────
+
+📄 Assignment.pdf
+
+📄 Resume.pdf
+
+📄 Lab Report.pdf
 ```
 
-### Assignment reason
+### APIs
 
 ```
-CREATE TYPE assignment_reasonAS ENUM ('AUTOMATIC','MANUAL','LOAD_BALANCING','REROUTING'
-);
-```
-
-### Assignment status
-
-```
-CREATE TYPE assignment_statusAS ENUM ('ACTIVE','UNASSIGNED','COMPLETED','FAILED'
-);
-```
-
-### Rerouting reason
-
-```
-CREATE TYPE rerouting_reasonAS ENUM ('PRINTER_FAILURE','PRINTER_OFFLINE','QUEUE_OVERLOAD','LONG_WAIT_TIME','MANUAL'
-);
-```
-
-### Rerouting status
-
-```
-CREATE TYPE rerouting_statusAS ENUM ('INITIATED','IN_PROGRESS','COMPLETED','FAILED','CANCELLED'
-);
+GET /documents
+POST /documents/upload
 ```
 
 ---
 
-# 8. Pickup
+## `/documents/upload`
 
-### Pickup token status
+Could also be a modal instead of a separate page.
 
-```
-CREATE TYPE pickup_token_statusAS ENUM ('ACTIVE','USED','EXPIRED','CANCELLED'
-);
-```
-
-### Pickup event status
+### Flow
 
 ```
-CREATE TYPE pickup_statusAS ENUM ('PENDING','VERIFIED','COMPLETED','FAILED'
-);
+Select File
+     ↓
+Upload
+     ↓
+Processing
+     ↓
+Document Ready
 ```
 
----
-
-# 9. Shop Members
+### API
 
 ```
-CREATE TYPE shop_member_roleAS ENUM ('OWNER','MANAGER','OPERATOR','STAFF'
-);
+POST /documents/upload
 ```
 
----
-
-# 10. Delivery
-
-### Delivery status
+Use:
 
 ```
-CREATE TYPE delivery_statusAS ENUM ('PENDING','ASSIGNED','PICKED_UP','IN_TRANSIT','DELIVERED','FAILED','CANCELLED'
-);
-```
-
-For `delivery_tracking_events.status`, **reuse `delivery_status`** instead of creating another enum.
-
----
-
-# 11. Notifications
-
-### Notification type
-
-```
-CREATE TYPE notification_typeAS ENUM ('ORDER_UPDATE','PAYMENT_UPDATE','PRINT_UPDATE','PRINTER_ALERT','PICKUP_READY','DELIVERY_UPDATE','SYSTEM'
-);
-```
-
-### Notification channel
-
-```
-CREATE TYPE notification_channelAS ENUM ('PUSH','EMAIL','SMS','IN_APP'
-);
-```
-
-### Notification delivery status
-
-```
-CREATE TYPE notification_delivery_statusAS ENUM ('PENDING','SENT','DELIVERED','FAILED'
-);
+multipart/form-data
 ```
 
 ---
 
-# 12. Document Access & Security
+## `/documents/[documentId]`
 
-### Access type
-
-```
-CREATE TYPE document_access_typeAS ENUM ('VIEW','DOWNLOAD','PRINT','EDIT'
-);
-```
-
-### Document access action
+Shows:
 
 ```
-CREATE TYPE document_access_actionAS ENUM ('VIEW','DOWNLOAD','PRINT','EDIT','DELETE'
-);
+Document Preview
+
+Pages: 20
+File Size
+Created At
+
+Actions:
+
+[ Print ]
+[ Edit ]
+[ Download ]
+[ Delete ]
+```
+
+### APIs
+
+```
+GET /documents/:id
+GET /documents/:id/versions
+GET /documents/:id/download
 ```
 
 ---
 
-# 13. AI
+# 8. Print Configuration Page 🔥
 
-### AI message role
+This is one of the most important frontend pages.
+
+Route:
 
 ```
-CREATE TYPE ai_message_roleAS ENUM ('USER','ASSISTANT','SYSTEM'
+/documents/[documentId]/print
+```
+
+or better:
+
+```
+/print/configure
+```
+
+with selected document state.
+
+### UI
+
+```
+┌───────────────────────────────────────┐
+│ DOCUMENT PREVIEW                      │
+│                                       │
+│              PDF                      │
+│                                       │
+├───────────────────────────────────────┤
+│ PRINT SETTINGS                        │
+│                                       │
+│ Copies        [-]  2  [+]             │
+│ Pages         All Pages               │
+│ Color         ● B&W  ○ Color          │
+│ Sides         ● Single ○ Double       │
+│ Paper         A4                      │
+│ Binding       Spiral                  │
+│                                       │
+├───────────────────────────────────────┤
+│ ESTIMATED PRICE                       │
+│ ₹ 24                                 │
+│                                       │
+│ [ Continue ]                          │
+└───────────────────────────────────────┘
+```
+
+### API
+
+Every time configuration changes:
+
+```
+POST /pricing/estimate
+```
+
+But **do not spam the backend on every click**.
+
+Use debounce:
+
+```
+Configuration changes
+        ↓
+Wait 400–600ms
+        ↓
+POST /pricing/estimate
+```
+
+---
+
+# 9. Checkout Flow
+
+Route:
+
+```
+/checkout
+```
+
+## Step 1
+
+```
+Select Shop
+```
+
+## Step 2
+
+```
+Confirm Print Configuration
+```
+
+## Step 3
+
+```
+Pickup / Delivery
+```
+
+## Step 4
+
+```
+Payment
+```
+
+I recommend a multi-step UI:
+
+```
+[1 Shop] ── [2 Configure] ── [3 Delivery] ── [4 Pay]
+```
+
+---
+
+# 10. Checkout State
+
+Do not store checkout data only in component state.
+
+Use Zustand.
+
+```
+checkoutStore
+```
+
+Example:
+
+```
+{shopId,documentVersionId,printConfiguration,fulfillmentType,addressId,estimatedPrice
+}
+```
+
+This survives navigation between pages.
+
+But remember:
+
+> Zustand state is not the source of truth for prices.
+> 
+
+The backend always recalculates the final price.
+
+---
+
+# 11. Order Creation + Payment Flow
+
+Frontend:
+
+```
+Checkout
+   ↓
+POST /orders
+   ↓
+Order Created
+PAYMENT_PENDING
+   ↓
+POST /payments/create
+   ↓
+Open Razorpay
+   ↓
+Payment Success
+   ↓
+POST /payments/verify
+   ↓
+Redirect
+   ↓
+/orders/:orderId
+```
+
+---
+
+# 12. `/orders`
+
+Customer order history.
+
+Tabs:
+
+```
+ACTIVE
+COMPLETED
+CANCELLED
+```
+
+### API
+
+```
+GET /orders
+```
+
+---
+
+# 13. `/orders/[orderId]` 🔥
+
+This should be a beautiful real-time tracking page.
+
+```
+Order #DP-00124
+
+✓ Payment Complete
+
+✓ Added to Queue
+
+● Printing
+
+○ Ready
+
+○ Picked Up
+```
+
+### Real-time updates
+
+Socket:
+
+```
+order:updated
+```
+
+Do not continuously poll the API.
+
+Initial load:
+
+```
+GET /orders/:id
+```
+
+Then:
+
+```
+Socket.IO updates
+```
+
+---
+
+# 14. QR Pickup Page
+
+Could be inside:
+
+```
+/orders/[orderId]
+```
+
+When status becomes:
+
+```
+READY_FOR_PICKUP
+```
+
+Show:
+
+```
+┌──────────────────────┐
+│                      │
+│       QR CODE        │
+│                      │
+└──────────────────────┘
+
+Show this QR at the shop
+```
+
+API:
+
+```
+GET /orders/:id/pickup-token
+```
+
+---
+
+# 15. AI Document Assistant
+
+Route:
+
+```
+/ai
+```
+
+UI:
+
+```
+┌────────────────────────────────────┐
+│ AI Document Assistant              │
+├────────────────────────────────────┤
+│                                    │
+│ AI: What document do you need?     │
+│                                    │
+│ You: Leave application             │
+│                                    │
+│ AI: Who is it addressed to?        │
+│                                    │
+├────────────────────────────────────┤
+│ Type your message...       [Send]  │
+└────────────────────────────────────┘
+```
+
+### APIs
+
+```
+POST /ai/conversations
+
+GET /ai/conversations
+
+GET /ai/conversations/:id
+
+POST /ai/conversations/:id/messages
+```
+
+After generation:
+
+```
+[ Preview ]
+
+[ Edit ]
+
+[ Print Now ]
+```
+
+---
+
+# 16. Shop Owner Dashboard
+
+Route:
+
+```
+/shop/dashboard
+```
+
+### Dashboard
+
+```
+Today's Orders: 42
+
+Revenue: ₹4,200
+
+Active Printers: 3/4
+
+Queue: 8 jobs
+
+Recent Orders
+────────────────
+
+DP-00124     PRINTING
+
+DP-00125     QUEUED
+
+DP-00126     READY
+```
+
+### APIs
+
+Ideally:
+
+```
+GET /shop/dashboard
+```
+
+I recommend adding this backend endpoint instead of making 8 API calls.
+
+Response:
+
+```
+{
+  "todayOrders":42,
+  "todayRevenue":4200,
+  "activePrinters":3,
+  "totalPrinters":4,
+  "queueLength":8,
+  "recentOrders": []
+}
+```
+
+---
+
+# 17. Shop Orders
+
+Route:
+
+```
+/shop/orders
+```
+
+### UI
+
+```
+Filters:
+
+[ All ]
+[ Paid ]
+[ Queued ]
+[ Printing ]
+[ Ready ]
+[ Completed ]
+```
+
+API:
+
+```
+GET /shops/:shopId/orders
+```
+
+Query:
+
+```
+?status=PRINTING
+&page=1
+&limit=20
+```
+
+---
+
+# 18. Smart Queue Page 🔥
+
+Route:
+
+```
+/shop/queue
+```
+
+### UI
+
+```
+CURRENT QUEUE
+
+1. Assignment.pdf
+   3 pages
+   Printer A
+
+2. Lab Report.pdf
+   15 pages
+   Waiting
+
+3. Project.pdf
+   50 pages
+   Waiting
+```
+
+Real-time:
+
+```
+queue:updated
+```
+
+API:
+
+```
+GET /shops/:shopId/queue
+```
+
+---
+
+# 19. Printers Page 🔥
+
+Route:
+
+```
+/shop/printers
+```
+
+UI:
+
+```
+Printer A
+🟢 ONLINE
+Queue: 2 jobs
+
+Printer B
+🔴 ERROR
+Paper Jam
+
+Printer C
+🟢 ONLINE
+Queue: 5 jobs
+```
+
+### APIs
+
+```
+GET /shops/:shopId/printers
+
+POST /shops/:shopId/printers
+
+PATCH /printers/:printerId
+```
+
+Real-time:
+
+```
+printer:updated
+printer:failure
+```
+
+---
+
+# 20. Printer Details
+
+Route:
+
+```
+/shop/printers/[printerId]
+```
+
+Shows:
+
+```
+Status
+
+Capabilities
+
+Current Job
+
+Queue
+
+Health History
+
+Failure History
+```
+
+APIs:
+
+```
+GET /printers/:id
+
+GET /printers/:id/health
+
+GET /printers/:id/failures
+
+GET /printers/:id/queue/prediction
+```
+
+---
+
+# 21. Shop Services Page
+
+```
+/shop/services
+```
+
+UI:
+
+```
+Services
+
+☑ Black & White Printing
+
+☑ Color Printing
+
+☑ Binding
+
+☑ Scanning
+
+☐ 3D Printing
+```
+
+API:
+
+```
+GET /shops/:shopId/services
+
+POST /shops/:shopId/services
+
+PATCH /shop-services/:id
+```
+
+---
+
+# 22. Pricing Management
+
+Route:
+
+```
+/shop/pricing
+```
+
+UI:
+
+```
+Black & White
+
+A4
+₹2 / page
+
+[ Edit ]
+
+────────────────
+
+Color
+
+A4
+₹10 / page
+```
+
+APIs:
+
+```
+GET /shop-services/:id/pricing
+
+POST /shop-services/:id/pricing
+
+PATCH /pricing/:id
+```
+
+---
+
+# 23. Shop Staff Page
+
+```
+/shop/staff
+```
+
+```
+Staff Members
+
+Kush
+OWNER
+
+John
+STAFF
+
+[ Add Staff ]
+```
+
+APIs:
+
+```
+GET /shops/:shopId/members
+
+POST /shops/:shopId/members
+
+PATCH /shops/:shopId/members/:memberId
+
+DELETE /shops/:shopId/members/:memberId
+```
+
+---
+
+# 24. Delivery Partner Frontend
+
+Routes:
+
+```
+/delivery/jobs
+
+/delivery/active
+
+/delivery/history
+```
+
+---
+
+## `/delivery/jobs`
+
+```
+Available Jobs
+
+Order #124
+
+Pickup:
+NITK Printing Shop
+
+Delivery:
+Hostel Block C
+
+[ Accept Job ]
+```
+
+---
+
+## `/delivery/active`
+
+```
+CURRENT DELIVERY
+
+Pickup Location
+
+↓ Map
+
+Customer Location
+
+[ Start Pickup ]
+
+[ Start Delivery ]
+
+[ Mark Delivered ]
+```
+
+APIs:
+
+```
+GET /delivery-partner/jobs
+
+POST /deliveries/:id/accept
+
+POST /deliveries/:id/pickup
+
+POST /deliveries/:id/complete
+```
+
+---
+
+# 25. Admin Frontend
+
+Routes:
+
+```
+/admin/dashboard
+
+/admin/users
+
+/admin/shops
+
+/admin/printers
+
+/admin/orders
+
+/admin/audit-logs
+```
+
+Keep this simple for SIH.
+
+Don't waste too much development time on an enterprise-level admin panel.
+
+---
+
+# 26. Complete Frontend Route Map
+
+```
+PUBLIC
+│
+├── /
+├── /shops
+├── /shops/:shopId
+├── /services
+└── /templates
+
+AUTH
+│
+├── /login
+├── /register
+├── /forgot-password
+└── /reset-password
+
+CUSTOMER
+│
+├── /dashboard
+│
+├── /documents
+├── /documents/:documentId
+├── /documents/upload
+│
+├── /print/configure
+│
+├── /checkout
+│
+├── /orders
+├── /orders/:orderId
+│
+├── /addresses
+│
+├── /notifications
+│
+└── /ai
+
+SHOP
+│
+├── /shop/dashboard
+│
+├── /shop/orders
+├── /shop/orders/:orderId
+│
+├── /shop/queue
+│
+├── /shop/printers
+├── /shop/printers/:printerId
+│
+├── /shop/services
+├── /shop/pricing
+├── /shop/staff
+├── /shop/settings
+└── /shop/analytics
+
+DELIVERY
+│
+├── /delivery/jobs
+├── /delivery/active
+└── /delivery/history
+
+ADMIN
+│
+├── /admin/dashboard
+├── /admin/users
+├── /admin/shops
+├── /admin/printers
+├── /admin/orders
+└── /admin/audit-logs
+```
+
+---
+
+# 27. Axios Architecture 🔥
+
+Now the important part.
+
+**Do not write Axios calls directly inside React components.**
+
+Bad:
+
+```
+useEffect(() => {axios.get("/orders");
+}, []);
+```
+
+This will become a mess.
+
+Instead:
+
+```
+Component
+    ↓
+React Query Hook
+    ↓
+Service/API Layer
+    ↓
+Axios Instance
+    ↓
+Backend
+```
+
+---
+
+# 28. Axios Folder Structure
+
+```
+src/
+├── lib/
+│   └── axios.ts
+│
+├── services/
+│   ├── auth.service.ts
+│   ├── users.service.ts
+│   ├── shops.service.ts
+│   ├── services.service.ts
+│   ├── pricing.service.ts
+│   ├── documents.service.ts
+│   ├── orders.service.ts
+│   ├── payments.service.ts
+│   ├── printers.service.ts
+│   ├── queue.service.ts
+│   ├── delivery.service.ts
+│   ├── notifications.service.ts
+│   ├── ai.service.ts
+│   └── admin.service.ts
+│
+├── hooks/
+│   ├── queries/
+│   │   ├── useShops.ts
+│   │   ├── useDocuments.ts
+│   │   ├── useOrders.ts
+│   │   └── ...
+│   │
+│   └── mutations/
+│       ├── useCreateOrder.ts
+│       ├── useUploadDocument.ts
+│       └── ...
+```
+
+---
+
+# 29. Axios Instance
+
+```
+// lib/axios.tsimportaxiosfrom"axios";exportconstapi=axios.create({
+  baseURL:process.env.NEXT_PUBLIC_API_URL,
+  withCredentials:true,
+  headers: {"Content-Type":"application/json",
+  },
+});
+```
+
+---
+
+# 30. Request Interceptor
+
+If using Bearer access tokens:
+
+```
+api.interceptors.request.use((config) => {consttoken=getAccessToken();if (token) {config.headers.Authorization=`Bearer${token}`;
+  }returnconfig;
+});
+```
+
+# 31. Response Interceptor — Token Refresh
+
+When:
+
+```
+401 Unauthorized
+```
+
+Flow:
+
+```
+API Request
+    ↓
+401
+    ↓
+POST /auth/refresh
+    ↓
+Get New Access Token
+    ↓
+Retry Original Request
+```
+
+Important: prevent infinite refresh loops.
+
+Use:
+
+```
+_isRetry
+```
+
+logic.
+
+---
+
+# 32. Better Authentication Recommendation
+
+For security, I recommend:
+
+```
+Access Token
+→ Short lived
+→ Memory
+
+Refresh Token
+→ HttpOnly Cookie
+→ Secure
+→ SameSite
+```
+
+Avoid storing refresh tokens in:
+
+```
+localStorage
+```
+
+because XSS can steal them.
+
+---
+
+# 33. Service Layer Example
+
+## `orders.service.ts`
+
+```
+import {api }from"@/lib/axios";exportconstorderService= {
+  create:async (data:CreateOrderRequest) => {constresponse=awaitapi.post("/orders",data);returnresponse.data;
+  },
+
+  getAll:async (params?:OrderFilters) => {constresponse=awaitapi.get("/orders", {
+      params,
+    });returnresponse.data;
+  },
+
+  getById:async (orderId:string) => {constresponse=awaitapi.get(`/orders/${orderId}`);returnresponse.data;
+  },
+
+  cancel:async (orderId:string) => {constresponse=awaitapi.post(`/orders/${orderId}/cancel`
+    );returnresponse.data;
+  },
+};
+```
+
+---
+
+# 34. TanStack Query Planning
+
+Axios handles HTTP.
+
+TanStack Query handles:
+
+```
+Caching
+Loading
+Errors
+Refetching
+Mutations
+Cache invalidation
+```
+
+Use it.
+
+---
+
+## Example
+
+```
+exportfunctionuseOrders() {returnuseQuery({
+    queryKey: ["orders"],
+    queryFn: () =>orderService.getAll(),
+  });
+}
+```
+
+Component:
+
+```
+const { data, isLoading, error }=useOrders();
+```
+
+---
+
+# 35. Query Key Architecture
+
+Use centralized keys.
+
+```
+exportconstqueryKeys= {
+  shops: {
+    all: ["shops"],
+    detail: (id:string) => ["shops",id],
+  },
+
+  documents: {
+    all: ["documents"],
+    detail: (id:string) => ["documents",id],
+  },
+
+  orders: {
+    all: ["orders"],
+    detail: (id:string) => ["orders",id],
+  },
+
+  printers: {
+    all: ["printers"],
+    detail: (id:string) => ["printers",id],
+  },
+};
+```
+
+This matters when you start invalidating caches.
+
+---
+
+# 36. Mutation Flow
+
+Example:
+
+```
+Create Order
+     ↓
+POST /orders
+     ↓
+Success
+     ↓
+Invalidate orders cache
+     ↓
+Redirect to payment
+```
+
+Example:
+
+```
+useMutation({
+  mutationFn:orderService.create,
+
+  onSuccess: () => {queryClient.invalidateQueries({
+      queryKey: ["orders"],
+    });
+  },
+});
+```
+
+---
+
+# 37. Upload Architecture
+
+For large files, don't use the normal JSON Axios configuration.
+
+Use:
+
+```
+constformData=newFormData();formData.append("file",file);awaitapi.post("/documents/upload",formData,
+  {
+    headers: {"Content-Type":"multipart/form-data",
+    },
+
+    onUploadProgress: (progressEvent) => {// calculate upload percentage
+    },
+  }
 );
 ```
 
-### AI output type
+UI:
 
 ```
-CREATE TYPE ai_output_typeAS ENUM ('DOCUMENT','TEXT','SUMMARY','TEMPLATE','OTHER'
-);
+Uploading...
+
+████████████░░░░
+
+78%
 ```
+
+---
+
+# 38. Real-Time Socket Architecture
+
+Create:
+
+```
+src/
+└── lib/
+    └── socket.ts
+```
+
+Connection:
+
+```
+User Login
+    ↓
+Connect Socket
+    ↓
+Authenticate
+    ↓
+Join user room
+```
+
+---
+
+## Events
+
+### Customer
+
+```
+order:updated
+
+notification:new
+```
+
+### Shop
+
+```
+order:new
+
+queue:updated
+
+printer:updated
+
+printer:failure
+```
+
+### Delivery
+
+```
+delivery:location
+
+delivery:status
+```
+
+---
+
+# 39. Socket + React Query Integration
+
+When socket receives:
+
+```
+order:updated
+```
+
+Don't manually update 10 components.
+
+Instead:
+
+```
+Socket Event
+      ↓
+Invalidate React Query
+      ↓
+Relevant components update
+```
+
+Or optimistically update the cached order if the payload is complete.
+
+For MVP, invalidation is simpler and safer.
+
+---
+
+# 40. Zustand Planning
+
+Use Zustand only for **client UI state**.
+
+Good uses:
+
+```
+Checkout configuration
+
+Sidebar state
+
+Selected shop
+
+Temporary filters
+
+Document editor state
+```
+
+Bad uses:
+
+```
+Orders database
+
+Users database
+
+Shop list
+```
+
+That belongs in TanStack Query.
+
+---
+
+# 41. Zustand Stores
+
+```
+stores/
+├── checkout.store.ts
+├── ui.store.ts
+├── document-editor.store.ts
+└── auth.store.ts
+```
+
+Potentially avoid `auth.store` if you use server-side session/me fetching.
+
+---
+
+# 42. Complete Data Flow
+
+Your frontend architecture should be:
+
+```
+                    USER ACTION
+                         │
+                         ▼
+                     COMPONENT
+                         │
+                         ▼
+                  REACT QUERY HOOK
+                         │
+                         ▼
+                    API SERVICE
+                         │
+                         ▼
+                  AXIOS INSTANCE
+                         │
+                         ▼
+                     BACKEND
+                         │
+                         ▼
+                    DATABASE
+```
+
+For real-time:
+
+```
+DATABASE
+    ↓
+Backend Event
+    ↓
+Socket.IO
+    ↓
+React Query Cache
+    ↓
+Updated UI
+```
+
+---
+
+# 43. Role-Based Routing
+
+You need route protection.
+
+Example:
+
+```
+CUSTOMER
+→ /dashboard
+
+SHOP_OWNER
+→ /shop/dashboard
+
+DELIVERY_PARTNER
+→ /delivery/jobs
+
+ADMIN
+→ /admin/dashboard
+```
+
+After login:
+
+```
+Get User Role
+       ↓
+Redirect to Correct Dashboard
+```
+
+But **frontend role protection alone is not security**.
+
+The backend must still enforce:
+
+```
+authorize("SHOP_OWNER")
+```
+
+---
+
+# 44. Frontend Middleware
+
+Next.js middleware can handle basic redirects:
+
+```
+User not logged in
+      ↓
+Redirect /login
+
+Logged in but visits /login
+      ↓
+Redirect dashboard
+```
+
+But don't rely on middleware as your only authorization mechanism.
+
+---
+
+# 45. MVP Frontend Build Order
+
+Don't create all pages immediately.
+
+## Phase 1 — Foundation
+
+```
+1. Next.js Setup
+2. Tailwind
+3. shadcn/ui
+4. Axios
+5. TanStack Query
+6. Auth
+7. Layouts
+```
+
+---
+
+## Phase 2 — Core Customer Flow
+
+```
+1. Landing Page
+2. Login/Register
+3. Shop Discovery
+4. Shop Details
+5. Document Upload
+6. Print Configuration
+7. Price Estimate
+8. Checkout
+```
+
+---
+
+## Phase 3 — Order
+
+```
+1. Create Order
+2. Razorpay
+3. Order Tracking
+4. Real-Time Status
+```
+
+---
+
+## Phase 4 — Shop Dashboard
+
+```
+1. Dashboard
+2. Orders
+3. Queue
+4. Printers
+```
+
+---
+
+## Phase 5 — Killer Demo
+
+```
+Printer Failure
+       ↓
+UI changes RED
+       ↓
+Affected Job
+       ↓
+Automatic Rerouting
+       ↓
+Queue Updates
+       ↓
+Customer Notification
+```
+
+This should be visually impressive during SIH judging.

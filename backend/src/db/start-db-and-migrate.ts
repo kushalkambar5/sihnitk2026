@@ -7,25 +7,53 @@ import path from 'path';
 
 dotenv.config();
 
-async function main() {
-  console.log('Initializing Embedded PostgreSQL Database Engine...');
-  
-  const pgEngine = new EmbeddedPostgres({
-    databaseDir: path.resolve('./.pg_data'),
+async function isPgRunning(): Promise<boolean> {
+  const client = new pg.Client({
     user: 'postgres',
     password: 'postgres',
+    host: 'localhost',
     port: 5432,
-    persistent: true,
+    database: 'postgres',
+    connectionTimeoutMillis: 1500,
   });
 
   try {
-    await pgEngine.initialise();
-  } catch (err: any) {
-    console.log('Database notice/already initialized:', err.message || err);
+    await client.connect();
+    await client.end();
+    return true;
+  } catch {
+    return false;
   }
+}
 
-  await pgEngine.start();
-  console.log('🚀 PostgreSQL database server running on port 5432!');
+async function main() {
+  const running = await isPgRunning();
+
+  if (!running) {
+    console.log('Initializing Embedded PostgreSQL Database Engine...');
+    const pgEngine = new EmbeddedPostgres({
+      databaseDir: path.resolve('./.pg_data'),
+      user: 'postgres',
+      password: 'postgres',
+      port: 5432,
+      persistent: true,
+    });
+
+    try {
+      await pgEngine.initialise();
+    } catch (err: any) {
+      console.log('Database already initialized.');
+    }
+
+    try {
+      await pgEngine.start();
+      console.log('🚀 PostgreSQL database server started on port 5432!');
+    } catch (err: any) {
+      console.log('Database server notice during start.');
+    }
+  } else {
+    console.log('🚀 PostgreSQL database server is already running on port 5432!');
+  }
 
   // Create database sih_nitk_2026 if not exists
   const rootClient = new pg.Client({
